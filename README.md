@@ -45,7 +45,7 @@ AdamW Update  ──►  repeat forever
 ## Quickstart
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/rl-coding-agent
+git clone https://github.com/Akicou/rl-coding-agent
 cd rl-coding-agent
 bash system_deps.sh          # install language runtimes
 pip install -r requirements.txt
