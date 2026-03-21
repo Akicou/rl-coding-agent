@@ -5,8 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from rl_agent.config import load_project_env
 from rl_agent.generator import ProblemGenerator
 
 
@@ -31,6 +37,7 @@ def main() -> None:
         "--save", action="store_true", help="Save output to problems.jsonl."
     )
     args = parser.parse_args()
+    load_project_env()
 
     generator = ProblemGenerator(
         base_url=os.getenv("OAI_BASE_URL", "http://localhost:11434/v1"),

@@ -8,7 +8,6 @@ from collections import Counter
 from typing import Any
 
 import torch
-from torch.cuda.amp import GradScaler
 from tqdm import tqdm
 
 from rl_agent.config import RLConfig
@@ -52,7 +51,7 @@ def train(cfg: RLConfig) -> None:
     optimizer = torch.optim.AdamW(
         (p for p in policy.parameters() if p.requires_grad), lr=cfg.lr
     )
-    scaler = GradScaler(enabled=torch.cuda.is_available())
+    scaler = torch.amp.GradScaler("cuda", enabled=torch.cuda.is_available())
 
     step = 0
     lang_counter: Counter[str] = Counter()
@@ -80,8 +79,17 @@ def train(cfg: RLConfig) -> None:
                     continue
 
                 prompt = _build_prompt(problem, lang_key)
-                prompt_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
-                texts, _, _ = rollout(prompt_ids, policy, ref_model, tokenizer, cfg)
+                prompt_batch = tokenizer(prompt, return_tensors="pt")
+                prompt_ids = prompt_batch.input_ids.to(device)
+                prompt_attention_mask = prompt_batch.attention_mask.to(device)
+                texts, _, _ = rollout(
+                    prompt_ids,
+                    prompt_attention_mask,
+                    policy,
+                    ref_model,
+                    tokenizer,
+                    cfg,
+                )
                 generated_batch = tokenizer(
                     texts,
                     return_tensors="pt",

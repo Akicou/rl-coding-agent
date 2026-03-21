@@ -49,6 +49,7 @@ def score_rollout(
 @torch.no_grad()
 def rollout(
     prompt_ids: Tensor,
+    prompt_attention_mask: Tensor,
     model: torch.nn.Module,
     ref_model: torch.nn.Module,
     tokenizer: Any,
@@ -58,9 +59,11 @@ def rollout(
 
     group = cfg.group_size
     repeated = prompt_ids.repeat(group, 1)
+    repeated_mask = prompt_attention_mask.repeat(group, 1)
     prompt_len = repeated.shape[1]
     outputs = model.generate(
         input_ids=repeated,
+        attention_mask=repeated_mask,
         max_new_tokens=cfg.max_new_tokens,
         do_sample=True,
         temperature=cfg.temperature,

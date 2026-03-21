@@ -5,6 +5,26 @@ from __future__ import annotations
 import os
 import random
 from dataclasses import dataclass, field
+from pathlib import Path
+
+
+def load_project_env(env_path: str | Path = ".env") -> None:
+    """Load simple KEY=VALUE pairs from a local .env file if present."""
+
+    path = Path(env_path)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ[key] = value
 
 
 @dataclass
@@ -65,6 +85,7 @@ class RLConfig:
     def from_env(cls) -> "RLConfig":
         """Build a config instance from environment variables."""
 
+        load_project_env()
         defaults = cls()
         return cls(
             model_name=os.getenv("HF_MODEL", defaults.model_name),
