@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, List
 
 import torch
 import torch.nn.functional as F
 from torch import Tensor
+
+logger = logging.getLogger(__name__)
 
 
 def _sequence_logps(
@@ -61,6 +64,10 @@ def rollout(
     repeated = prompt_ids.repeat(group, 1)
     repeated_mask = prompt_attention_mask.repeat(group, 1)
     prompt_len = repeated.shape[1]
+
+    logger.debug(
+        f"Starting model.generate: batch_size={group}, prompt_len={prompt_len}"
+    )
     outputs = model.generate(
         input_ids=repeated,
         attention_mask=repeated_mask,
@@ -69,9 +76,14 @@ def rollout(
         temperature=cfg.temperature,
         top_p=cfg.top_p,
         pad_token_id=tokenizer.eos_token_id,
+        use_cache=True,
     )
+    logger.debug(f"Finished model.generate: output_shape={outputs.shape}")
+
     texts = tokenizer.batch_decode(outputs[:, prompt_len:], skip_special_tokens=True)
     attention_mask = outputs.ne(tokenizer.pad_token_id or tokenizer.eos_token_id).long()
+
+    logger.debug("Starting score_rollout")
     policy_logps, ref_logps = score_rollout(
         outputs,
         prompt_len,
@@ -79,4 +91,6 @@ def rollout(
         ref_model,
         attention_mask=attention_mask,
     )
+    logger.debug("Finished score_rollout")
+
     return texts, policy_logps, ref_logps

@@ -21,6 +21,8 @@ class GoExecutor(LanguageExecutor):
     def execute(self, code: str, stdin: str = "", timeout: int = 10) -> ExecutionResult:
         """Execute Go code after creating a temporary module."""
 
+        import sys
+
         with tempfile.TemporaryDirectory(prefix="tmp_go_") as tmpdir:
             root = Path(tmpdir)
             (root / "main.go").write_text(code, encoding="utf-8")
@@ -36,15 +38,16 @@ class GoExecutor(LanguageExecutor):
                 )
                 if not get_result.success:
                     return get_result
+            binary_name = "agent.exe" if sys.platform == "win32" else "agent"
             build_result = self._run(
-                ["go", "build", "-o", "agent.exe", "main.go"],
+                ["go", "build", "-o", binary_name, "main.go"],
                 cwd=tmpdir,
                 timeout=max(timeout, 60),
             )
             if not build_result.success:
                 return build_result
             return self._run(
-                [str(root / "agent.exe")],
+                [str(root / binary_name)],
                 cwd=tmpdir,
                 stdin=stdin,
                 timeout=timeout,

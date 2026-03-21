@@ -33,6 +33,8 @@ class RustExecutor(LanguageExecutor):
     def execute(self, code: str, stdin: str = "", timeout: int = 10) -> ExecutionResult:
         """Build and run a Rust binary crate."""
 
+        import sys
+
         with tempfile.TemporaryDirectory(prefix="tmp_rust_") as tmpdir:
             init_result = self._run(
                 ["cargo", "init", "--bin", "--name", "agent", "."],
@@ -61,5 +63,6 @@ class RustExecutor(LanguageExecutor):
             )
             if not build_result.success:
                 return build_result
-            binary = Path(tmpdir, "target", "release", "agent")
+            binary_name = "agent.exe" if sys.platform == "win32" else "agent"
+            binary = Path(tmpdir, "target", "release", binary_name)
             return self._run([str(binary)], cwd=tmpdir, stdin=stdin, timeout=timeout)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(slots=True)
@@ -67,15 +68,27 @@ class LanguageExecutor(ABC):
     ) -> ExecutionResult:
         """Run a subprocess command with timeout handling."""
 
+        import shutil
+        import sys
+
+        # On Windows, we need to find the correct executable (e.g., .cmd or .exe)
+        # shutil.which handles this correctly by checking PATHEXT.
+        cmd = list(command)
+        if not Path(cmd[0]).is_absolute():
+            exe = shutil.which(cmd[0])
+            if exe:
+                cmd[0] = exe
+
         try:
             proc = subprocess.run(
-                command,
+                cmd,
                 input=stdin,
                 capture_output=True,
                 text=True,
                 cwd=cwd,
                 timeout=timeout,
                 check=False,
+                shell=False,
             )
             return ExecutionResult(
                 stdout=proc.stdout,
@@ -89,4 +102,37 @@ class LanguageExecutor(ABC):
                 stderr=exc.stderr or "",
                 returncode=124,
                 timed_out=True,
+            )
+        except FileNotFoundError:
+            # Fallback for some Windows environments where shell=True is needed for scripts
+            if sys.platform == "win32":
+                try:
+                    proc = subprocess.run(
+                        cmd,
+                        input=stdin,
+                        capture_output=True,
+                        text=True,
+                        cwd=cwd,
+                        timeout=timeout,
+                        check=False,
+                        shell=True,
+                    )
+                    return ExecutionResult(
+                        stdout=proc.stdout,
+                        stderr=proc.stderr,
+                        returncode=proc.returncode,
+                        timed_out=False,
+                    )
+                except Exception as exc2:
+                    return ExecutionResult(
+                        stdout="",
+                        stderr=str(exc2),
+                        returncode=1,
+                        timed_out=False,
+                    )
+            return ExecutionResult(
+                stdout="",
+                stderr=f"Executable not found: {cmd[0]}",
+                returncode=1,
+                timed_out=False,
             )

@@ -49,11 +49,11 @@ class RLConfig:
     language_weights: dict[str, float] | None = None
 
     # GRPO
-    group_size: int = 8
+    group_size: int = 4
     lr: float = 5e-7
     kl_coef: float = 0.04
     clip_eps: float = 0.2
-    max_new_tokens: int = 1024
+    max_new_tokens: int = 256
     temperature: float = 0.8
     top_p: float = 0.95
 

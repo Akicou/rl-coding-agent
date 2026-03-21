@@ -19,12 +19,15 @@ class CppExecutor(LanguageExecutor):
     def execute(self, code: str, stdin: str = "", timeout: int = 10) -> ExecutionResult:
         """Compile and run a C++ source file."""
 
+        import sys
+
         with tempfile.TemporaryDirectory(prefix="tmp_cpp_") as tmpdir:
             root = Path(tmpdir)
             (root / "main.cpp").write_text(code, encoding="utf-8")
-            binary = root / "main"
+            binary_name = "main.exe" if sys.platform == "win32" else "main"
+            binary = root / binary_name
             compile_result = self._run(
-                ["g++", "-O2", "-std=c++17", "main.cpp", "-o", str(binary)],
+                ["g++", "-O2", "-std=c++17", "main.cpp", "-o", binary_name],
                 cwd=tmpdir,
                 timeout=timeout,
             )

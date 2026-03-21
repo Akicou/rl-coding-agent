@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 import re
 from typing import Optional
 
 from openai import OpenAI
 from pydantic import AliasChoices, BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class TestCase(BaseModel):
@@ -121,7 +124,7 @@ class ProblemGenerator:
                 if problem.test_cases:
                     return problem
         except Exception as exc:
-            print(f"[generator] structured parse failed: {exc}")
+            logger.warning(f"structured parse failed: {exc}")
 
         try:
             response = self.client.chat.completions.create(
@@ -135,8 +138,8 @@ class ProblemGenerator:
             if problem.test_cases:
                 return problem
         except Exception as exc:
-            print(f"[generator] json fallback failed: {exc}")
-        print("[generator] no usable test cases were generated")
+            logger.warning(f"json fallback failed: {exc}")
+        logger.error("no usable test cases were generated")
         return None
 
     @staticmethod
@@ -149,4 +152,7 @@ class ProblemGenerator:
             return match.group(1).strip()
         if text.startswith("{"):
             return text
-        return json.dumps(json.loads(text))
+        try:
+            return json.dumps(json.loads(text))
+        except Exception:
+            return text
