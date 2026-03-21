@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import random
 import re
+import threading
+from queue import Queue
 from typing import Optional
 
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 from pydantic import AliasChoices, BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -156,3 +159,103 @@ class ProblemGenerator:
             return json.dumps(json.loads(text))
         except Exception:
             return text
+
+
+class AsyncProblemGenerator:
+    """High-throughput problem generator using AsyncOpenAI and a prefetch queue."""
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        difficulty: str,
+        n_tests: int,
+        queue_size: int = 8,
+    ) -> None:
+        self.client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+        self.model = model
+        self.difficulty = difficulty
+        self.n_tests = n_tests
+        self.queue: Queue[CodingProblem] = Queue(maxsize=queue_size)
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+
+    def _run_loop(self) -> None:
+        """Run the asyncio event loop in a background thread."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(self._producer())
+        finally:
+            loop.close()
+
+    async def _producer(self) -> None:
+        """Continuously refill the queue using async calls."""
+        while not self._stop_event.is_set():
+            if self.queue.full():
+                await asyncio.sleep(0.1)
+                continue
+
+            # Generate a batch of problems to fill the queue
+            needed = self.queue.maxsize - self.queue.qsize()
+            if needed <= 0:
+                await asyncio.sleep(0.1)
+                continue
+
+            tasks = [self._generate_one() for _ in range(needed)]
+            results = await asyncio.gather(*tasks)
+
+            for prob in results:
+                if prob:
+                    # Non-blocking put since we calculated 'needed'
+                    # but use a small timeout or check just in case.
+                    try:
+                        self.queue.put(prob, timeout=0.1)
+                    except Exception:
+                        pass
+
+    async def _generate_one(self) -> Optional[CodingProblem]:
+        """Generate a single problem asynchronously."""
+        topic = random.choice(_TOPICS)
+        user_prompt = _GEN_USER.format(
+            difficulty=self.difficulty, n_tests=self.n_tests, topic=topic
+        )
+        messages = [
+            {"role": "system", "content": _GEN_SYSTEM},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            response = await self.client.beta.chat.completions.parse(
+                model=self.model,
+                messages=messages,
+                response_format=CodingProblem,
+            )
+            parsed = response.choices[0].message.parsed
+            if parsed is not None:
+                return CodingProblem.model_validate(parsed)
+        except Exception as exc:
+            logger.debug(f"async structured parse failed: {exc}")
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content or ""
+            clean = ProblemGenerator._strip_fences(content)
+            return CodingProblem.model_validate_json(clean)
+        except Exception as exc:
+            logger.debug(f"async json fallback failed: {exc}")
+        return None
+
+    def get(self) -> CodingProblem:
+        """Get the next available problem, blocking if necessary."""
+        return self.queue.get()
+
+    def stop(self) -> None:
+        """Signal the producer to stop."""
+        self._stop_event.set()

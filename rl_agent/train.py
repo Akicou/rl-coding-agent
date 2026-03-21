@@ -6,6 +6,7 @@ import logging
 import os
 import random
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 
 import torch
@@ -13,12 +14,18 @@ from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from rl_agent.config import RLConfig
-from rl_agent.generator import ProblemGenerator
+from rl_agent.generator import AsyncProblemGenerator
 from rl_agent.grpo import grpo_loss
 from rl_agent.languages import LANGUAGE_REGISTRY
 from rl_agent.models import load_models
 from rl_agent.reward import compute_reward
 from rl_agent.rollout import rollout, score_rollout
+
+
+def _compute_reward_task(args):
+    """Helper for process pool mapping."""
+    text, problem, lang_key, cfg = args
+    return compute_reward(text, problem, lang_key, cfg)[0]
 
 
 def _build_prompt(problem: Any, lang_key: str) -> str:
@@ -54,7 +61,14 @@ def train(cfg: RLConfig) -> None:
     os.makedirs(cfg.output_dir, exist_ok=True)
     tokenizer, policy, ref_model = load_models(cfg)
     device = next(policy.parameters()).device
-    generator = ProblemGenerator(cfg.oai_base_url, cfg.oai_api_key, cfg.oai_model)
+    generator = AsyncProblemGenerator(
+        cfg.oai_base_url,
+        cfg.oai_api_key,
+        cfg.oai_model,
+        cfg.gen_difficulty,
+        cfg.n_test_cases,
+        queue_size=cfg.prefetch_queue_size,
+    )
     optimizer = torch.optim.AdamW(
         (p for p in policy.parameters() if p.requires_grad), lr=cfg.lr
     )
@@ -71,7 +85,9 @@ def train(cfg: RLConfig) -> None:
     )
 
     try:
-        with logging_redirect_tqdm():
+        with logging_redirect_tqdm(), ProcessPoolExecutor(
+            max_workers=cfg.reward_workers
+        ) as executor:
             while cfg.max_steps == -1 or step < cfg.max_steps:
                 optimizer.zero_grad(set_to_none=True)
                 batch_rewards: list[float] = []
@@ -83,17 +99,10 @@ def train(cfg: RLConfig) -> None:
                     for _ in range(cfg.batch_size):
                         lang_key = cfg.sample_language()
                         lang_counter[lang_key] += 1
-                        topic = random.choice(list(generator.topics))
                         progress.set_postfix_str(
                             f"step={step + 1} batch={completed_micro_batches}/{micro_batches_per_step} stage=generate lang={lang_key}"
                         )
-                        problem = generator.generate(
-                            cfg.gen_difficulty, cfg.n_test_cases, topic=topic
-                        )
-                        if problem is None:
-                            completed_micro_batches += 1
-                            progress.update(1 / micro_batches_per_step)
-                            continue
+                        problem = generator.get()
 
                         prompt = _build_prompt(problem, lang_key)
                         prompt_batch = tokenizer(prompt, return_tensors="pt")
@@ -122,7 +131,10 @@ def train(cfg: RLConfig) -> None:
                             [prompt_ids.repeat(len(texts), 1), generated_ids], dim=1
                         )
                         attention_mask = torch.cat(
-                            [torch.ones_like(prompt_ids).repeat(len(texts), 1), generated_mask],
+                            [
+                                torch.ones_like(prompt_ids).repeat(len(texts), 1),
+                                generated_mask,
+                            ],
                             dim=1,
                         )
                         progress.set_postfix_str(
@@ -138,9 +150,13 @@ def train(cfg: RLConfig) -> None:
                         progress.set_postfix_str(
                             f"step={step + 1} batch={completed_micro_batches}/{micro_batches_per_step} stage=reward lang={lang_key}"
                         )
-                        rewards_list = [
-                            compute_reward(text, problem, lang_key, cfg)[0] for text in texts
-                        ]
+
+                        # Parallel reward computation
+                        reward_args = [(text, problem, lang_key, cfg) for text in texts]
+                        rewards_list = list(
+                            executor.map(_compute_reward_task, reward_args)
+                        )
+
                         rewards = torch.tensor(
                             rewards_list, device=policy_lp.device, dtype=policy_lp.dtype
                         )

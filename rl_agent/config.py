@@ -27,6 +27,10 @@ def load_project_env(env_path: str | Path = ".env") -> None:
         os.environ[key] = value
 
 
+def _default_languages() -> list[str]:
+    return ["python", "golang", "nodejs", "csharp", "cpp", "rust"]
+
+
 @dataclass
 class RLConfig:
     """Top-level runtime configuration for training."""
@@ -41,10 +45,11 @@ class RLConfig:
     oai_model: str = "qwen2.5:14b"
     gen_difficulty: str = "medium"
     n_test_cases: int = 5
+    prefetch_queue_size: int = 8
 
     # Language sampling
     active_languages: list[str] = field(
-        default_factory=lambda: ["python", "golang", "nodejs", "csharp", "cpp", "rust"]
+        default_factory=_default_languages
     )
     language_weights: dict[str, float] | None = None
 
@@ -60,6 +65,7 @@ class RLConfig:
     # Loop
     batch_size: int = 2
     grad_accum: int = 4
+    reward_workers: int = 4
     max_steps: int = -1
     save_every: int = 200
     log_every: int = 10
