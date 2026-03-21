@@ -1,138 +1,94 @@
-# 🧠 rl-coding-agent
+# RL Coding Agent
 
-*Infinite RL loop that trains an open-source LLM into a SOTA coding agent — self-generating problems, multi-language sandboxed execution, zero human labels.*
+**Self-improving LLMs through Group Relative Policy Optimization (GRPO) and multi-language execution sandboxes.**
 
-![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.3%2B-ee4c2c)
-![License](https://img.shields.io/badge/License-MIT-green)
-![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch 2.3+](https://img.shields.io/badge/pytorch-2.3+-ee4c2c.svg)](https://pytorch.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Train `Qwen/Qwen2.5-Coder-7B-Instruct` inside an infinite reinforcement learning loop powered by GRPO, AI-generated coding problems, and real code execution across six runtimes.
+This project implements an autonomous training loop that evolves `Qwen2.5-Coder` (or any compatible model) into a superior coding agent. It leverages **GRPO**—the same reinforcement learning logic behind DeepSeek-R1—to optimize model performance using real-world execution feedback across six programming languages, requiring **zero human labels**.
 
-## Features
+---
 
-- 🚀 GRPO training loop with no critic or value network
-- 🤖 Self-generated problems via any OpenAI-compatible endpoint: Ollama, vLLM, LM Studio, or OpenAI
-- 🧱 Pydantic structured output first, JSON-mode fallback second
-- 🌍 Six execution targets: Python 🐍, Go 🐹, Node.js 🟩, C# 🔵, C++ ⚙️, Rust 🦀
-- ⏱️ Per-language sandboxed subprocess execution with strict timeouts
-- 📦 Automatic dependency tracking and installation per language runtime
-- 🧠 QLoRA 4-bit NF4 training that fits on a single 24 GB GPU
-- 💾 Checkpoint saving and resume-friendly output layout
-- 🛠️ Easily extensible language layer: add a new runtime in two steps
+## 🚀 Highlights
 
-## How It Works
+- **GRPO Training:** Efficient reinforcement learning without the overhead of a separate critic or value network.
+- **Autonomous Problem Generation:** Uses any OpenAI-compatible API (Ollama, vLLM, OpenRouter) to generate unique coding challenges on the fly.
+- **Multi-Language Sandbox:** Integrated execution for **Python, Go, Node.js, C#, C++, and Rust** with strict timeouts and dependency management.
+- **Hardware Efficient:** Optimized for consumer hardware; fits 7B models in 4-bit (NF4) on a single 24GB GPU (RTX 3090/4090).
+- **Windows & Linux Ready:** Cross-platform support for all language runtimes and execution environments.
 
-```text
-Generator LLM
-    │  generates structured CodingProblem (title, description, test cases)
-    ▼
-Policy Model (Qwen2.5-Coder)
-    │  samples G=8 completions per problem per language
-    ▼
-Sandbox Executor (per language)
-    │  runs code, compares stdout to expected
-    ▼
-Reward Signal
-    │  format + compile + pass-rate
-    ▼
-GRPO Loss
-    │  normalise rewards → advantages → policy gradient + KL penalty
-    ▼
-AdamW Update  ──►  repeat forever
+## 🛠️ The Feedback Loop
+
+1. **Synthesize:** A "Teacher" LLM generates a structured coding problem with unit tests.
+2. **Rollout:** The "Student" model generates multiple completion candidates (the "Group").
+3. **Execute:** Every candidate is compiled and run against the unit tests in a secure sandbox.
+4. **Reward:** Candidates are scored based on formatting, compilation success, and pass rate.
+5. **Optimize:** GRPO computes advantages within the group to update the student policy.
+
+## 🚦 Getting Started
+
+### 1. Prerequisites
+Ensure you have the necessary language runtimes (Go, Node, .NET, G++, Rust) installed.
+```bash
+# On Linux
+bash system_deps.sh
+
+# On Windows
+# Ensure 'go', 'node', 'dotnet', 'g++', and 'cargo' are in your PATH.
 ```
 
-## Quickstart
-
+### 2. Setup
 ```bash
 git clone https://github.com/Akicou/rl-coding-agent
 cd rl-coding-agent
-bash system_deps.sh          # install language runtimes
 pip install -r requirements.txt
-cp .env.example .env         # fill in your endpoint
-python scripts/smoke_test.py --model /path/to/model-or-snapshot
+cp .env.example .env  # Configure your OAI_BASE_URL and API keys
+```
+
+### 3. Training
+```bash
+# Run a smoke test to verify model loading and generation
+python scripts/smoke_test.py
+
+# Start the infinite training loop
 python scripts/train.py
 ```
 
-## Configuration
+## ⚙️ Configuration (`RLConfig`)
 
-`RLConfig` controls model loading, generation, rewards, and loop behavior.
+Key parameters for tuning the training loop:
 
-| Field | Default | Description |
-|------|---------|-------------|
-| `model_name` | `Qwen/Qwen2.5-Coder-7B-Instruct` | HuggingFace policy and reference model ID |
-| `load_in_4bit` | `True` | Enable QLoRA-friendly 4-bit loading |
-| `oai_base_url` | `http://localhost:11434/v1` | OpenAI-compatible generator endpoint |
-| `oai_api_key` | `ollama` | API key or placeholder token |
-| `oai_model` | `qwen2.5:14b` | Generator model name at the endpoint |
-| `gen_difficulty` | `medium` | Problem difficulty: easy, medium, hard, competitive |
-| `n_test_cases` | `5` | Number of test cases per generated problem |
-| `active_languages` | `python,golang,nodejs,csharp,cpp,rust` | Runtime pool sampled during training |
-| `language_weights` | `None` | Optional weighted sampling by language key |
-| `group_size` | `8` | Number of sampled completions per rollout group |
-| `lr` | `5e-7` | AdamW learning rate |
-| `kl_coef` | `0.04` | KL regularization strength against reference policy |
-| `clip_eps` | `0.2` | PPO-style clipping epsilon |
-| `max_new_tokens` | `1024` | Maximum generated response length |
-| `temperature` | `0.8` | Sampling temperature |
-| `top_p` | `0.95` | Nucleus sampling threshold |
-| `batch_size` | `2` | Problems processed per gradient accumulation slice |
-| `grad_accum` | `4` | Number of accumulation slices per optimizer step |
-| `max_steps` | `-1` | `-1` means run forever |
-| `save_every` | `200` | Save checkpoint frequency in optimizer steps |
-| `log_every` | `10` | Logging cadence |
-| `output_dir` | `./rl_coding_agent` | Checkpoint and artifact directory |
-| `w_pass` | `1.0` | Pass-rate reward weight |
-| `w_compile` | `0.3` | Compile/execution reward weight |
-| `w_format` | `0.1` | Code-format reward weight |
-| `exec_timeout` | `10` | Per-test subprocess timeout in seconds |
+| Category | Parameter | Default | Description |
+| :--- | :--- | :--- | :--- |
+| **Model** | `model_name` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Target policy & reference model |
+| **Generation** | `group_size` | `4` | Completions per rollout group |
+| | `max_new_tokens` | `256` | Max generation length |
+| **RL** | `kl_coef` | `0.04` | Regularization vs. reference policy |
+| | `clip_eps` | `0.2` | PPO-style clipping epsilon |
+| **Reward** | `w_pass` | `1.0` | Weight for test pass rate |
+| | `w_compile` | `0.3` | Weight for compilation success |
+| **Loop** | `batch_size` | `2` | Problems per micro-batch |
+| | `grad_accum` | `4` | Gradients accumulated per step |
 
-## Language Support
+## 🧪 Language Runtimes
 
-| Key | Runtime | Dep tracking | Notes |
-|-----|---------|-------------|-------|
-| `python` | Python 3.11 | import -> pip | Auto-installs missing packages |
-| `golang` | Go 1.22 | import paths -> go get | Fresh `go.mod` per run |
-| `nodejs` | Node.js 20 | require/import -> npm | Fresh `package.json` per run |
-| `csharp` | .NET 8 | using namespace -> NuGet | Fresh `.csproj` per run |
-| `cpp` | GCC g++ C++17 | None (stdlib) | Compile + run |
-| `rust` | Rust stable | use/extern -> Cargo.toml | Full cargo build |
+| Language | Engine | Sandbox Detail |
+| :--- | :--- | :--- |
+| **Python** | 3.11+ | Auto-installs missing packages via pip |
+| **Go** | 1.22+ | Isolated `go.mod` environment |
+| **Node.js** | 20+ | Dynamic `package.json` with npm support |
+| **C#** | .NET 8 | Ephemeral `.csproj` with NuGet resolution |
+| **C++** | G++ 17 | Direct compilation and execution |
+| **Rust** | Stable | Full Cargo project isolation |
 
-## Adding a New Language
+## 🤝 Contributing
 
-1. Subclass `LanguageExecutor` inside `rl_agent/languages/` and implement `extract_deps()` plus `execute()`.
-2. Register the executor in `rl_agent/languages/__init__.py` by adding a new `LanguageProfile` entry to `LANGUAGE_REGISTRY`.
+We welcome technical contributions. To add a new language runtime:
+1.  Subclass `LanguageExecutor` in `rl_agent/languages/`.
+2.  Implement `extract_deps()` and `execute()`.
+3.  Register it in the `LANGUAGE_REGISTRY`.
 
-## Generator Endpoints
+## 📄 License
 
-```python
-# Ollama (default)
-oai_base_url = "http://localhost:11434/v1"
-oai_api_key = "ollama"
-
-# vLLM
-oai_base_url = "http://localhost:8000/v1"
-oai_api_key = "none"
-
-# LM Studio
-oai_base_url = "http://localhost:1234/v1"
-oai_api_key = "lm-studio"
-
-# OpenAI
-oai_base_url = "https://api.openai.com/v1"
-oai_api_key = "sk-..."
-```
-
-## Hardware
-
-- Minimum: 1x 24 GB VRAM GPU (RTX 3090/4090, RX 7900 XTX) for the 7B model with QLoRA
-- AMD ROCm: swap the torch index URL for a ROCm wheel and use `bitsandbytes-rocm`
-- Multi-GPU: keep `device_map="auto"` enabled, which is already the default
-
-## License
-
-MIT
-
-## Contributing
-
-PRs are welcome. For large changes, please open an issue first so the direction can be discussed before implementation.
+MIT © 2026 Akicou
