@@ -37,13 +37,13 @@ def load_models(cfg: Any) -> tuple[Any, torch.nn.Module, torch.nn.Module]:
 
     policy = AutoModelForCausalLM.from_pretrained(
         cfg.model_name,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map="auto",
         quantization_config=quant_config,
     )
     ref_model = AutoModelForCausalLM.from_pretrained(
         cfg.model_name,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map="auto",
         quantization_config=quant_config,
     )

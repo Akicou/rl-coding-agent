@@ -50,6 +50,7 @@ cd rl-coding-agent
 bash system_deps.sh          # install language runtimes
 pip install -r requirements.txt
 cp .env.example .env         # fill in your endpoint
+python scripts/smoke_test.py --model /path/to/model-or-snapshot
 python scripts/train.py
 ```
 

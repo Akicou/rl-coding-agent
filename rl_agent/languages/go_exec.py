@@ -25,7 +25,7 @@ class GoExecutor(LanguageExecutor):
             root = Path(tmpdir)
             (root / "main.go").write_text(code, encoding="utf-8")
             init_result = self._run(
-                ["go", "mod", "init", "agent"], cwd=tmpdir, timeout=timeout
+                ["go", "mod", "init", "agent"], cwd=tmpdir, timeout=60
             )
             if not init_result.success:
                 return init_result
@@ -36,6 +36,16 @@ class GoExecutor(LanguageExecutor):
                 )
                 if not get_result.success:
                     return get_result
+            build_result = self._run(
+                ["go", "build", "-o", "agent.exe", "main.go"],
+                cwd=tmpdir,
+                timeout=max(timeout, 60),
+            )
+            if not build_result.success:
+                return build_result
             return self._run(
-                ["go", "run", "main.go"], cwd=tmpdir, stdin=stdin, timeout=timeout
+                [str(root / "agent.exe")],
+                cwd=tmpdir,
+                stdin=stdin,
+                timeout=timeout,
             )
