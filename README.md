@@ -13,6 +13,7 @@ This project implements an autonomous training loop that evolves `Qwen2.5-Coder`
 ## 🚀 Highlights
 
 - **GRPO Training:** Efficient reinforcement learning without the overhead of a separate critic or value network.
+- **High Throughput:** Optimized with **Async problem generation** (via `AsyncOpenAI`) and **Parallel reward computation** to maximize GPU utilization.
 - **Autonomous Problem Generation:** Uses any OpenAI-compatible API (Ollama, vLLM, OpenRouter) to generate unique coding challenges on the fly.
 - **Multi-Language Sandbox:** Integrated execution for **Python, Go, Node.js, C#, C++, and Rust** with strict timeouts and dependency management.
 - **Hardware Efficient:** Optimized for consumer hardware; fits 7B models in 4-bit (NF4) on a single 24GB GPU (RTX 3090/4090).
@@ -64,12 +65,14 @@ Key parameters for tuning the training loop:
 | **Model** | `model_name` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Target policy & reference model |
 | **Generation** | `group_size` | `4` | Completions per rollout group |
 | | `max_new_tokens` | `65536` | Max generation length |
+| | `prefetch_queue_size` | `8` | Problems pre-fetched in background |
 | **RL** | `kl_coef` | `0.04` | Regularization vs. reference policy |
 | | `clip_eps` | `0.2` | PPO-style clipping epsilon |
 | **Reward** | `w_pass` | `1.0` | Weight for test pass rate |
 | | `w_compile` | `0.3` | Weight for compilation success |
 | **Loop** | `batch_size` | `2` | Problems per micro-batch |
 | | `grad_accum` | `4` | Gradients accumulated per step |
+| | `reward_workers` | `4` | Parallel processes for code execution |
 
 ## 🧪 Language Runtimes
 
