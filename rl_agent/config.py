@@ -53,7 +53,7 @@ class RLConfig:
     lr: float = 5e-7
     kl_coef: float = 0.04
     clip_eps: float = 0.2
-    max_new_tokens: int = 256
+    max_new_tokens: int = 65536
     temperature: float = 0.8
     top_p: float = 0.95
 

@@ -63,7 +63,7 @@ Key parameters for tuning the training loop:
 | :--- | :--- | :--- | :--- |
 | **Model** | `model_name` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Target policy & reference model |
 | **Generation** | `group_size` | `4` | Completions per rollout group |
-| | `max_new_tokens` | `256` | Max generation length |
+| | `max_new_tokens` | `65536` | Max generation length |
 | **RL** | `kl_coef` | `0.04` | Regularization vs. reference policy |
 | | `clip_eps` | `0.2` | PPO-style clipping epsilon |
 | **Reward** | `w_pass` | `1.0` | Weight for test pass rate |
